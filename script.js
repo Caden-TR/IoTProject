@@ -55,24 +55,6 @@ const SCENE_VOL={home:1,q1:.55,q2:.55,q3:.65,win:.9,lose:.8};
 // built-in tunes: bpm, wave, chord progression [midi root, type] per bar, arpeggio pattern, drums on/off
 const CH={m:[0,3,7],M:[0,4,7],s:[0,5,7]};
 const SYN={
- home:[
-  {t:"Neon Boot-Up",bpm:112,w:"square",prog:[[57,"m"],[57,"m"],[60,"M"],[55,"M"]],arp:[0,1,2,1,0,1,2,3],drum:1},
-  {t:"Pixel Parade",bpm:124,w:"square",prog:[[60,"M"],[65,"M"],[67,"M"],[57,"m"]],arp:[0,2,1,2,0,2,3,2],drum:1},
-  {t:"Cyber Sunrise",bpm:96,w:"triangle",prog:[[53,"M"],[55,"M"],[57,"m"],[55,"M"]],arp:[0,1,2,3,2,1,2,1],drum:0}],
- q1:[
-  {t:"Warm-Up",bpm:100,w:"triangle",prog:[[55,"M"],[52,"m"],[57,"m"],[50,"M"]],arp:[0,1,2,1,0,1,2,1],drum:0},
-  {t:"Easy Does It",bpm:104,w:"triangle",prog:[[60,"M"],[57,"m"],[53,"M"],[55,"M"]],arp:[0,2,1,2,0,2,1,2],drum:0}],
- q2:[
-  {t:"Focus Mode",bpm:116,w:"square",prog:[[57,"m"],[53,"M"],[60,"M"],[55,"M"]],arp:[0,2,1,3,0,2,1,3],drum:1},
-  {t:"In The Zone",bpm:120,w:"square",prog:[[52,"m"],[48,"M"],[55,"M"],[50,"M"]],arp:[0,1,3,1,0,2,3,2],drum:1}],
- q3:[
-  {t:"Final Stretch",bpm:138,w:"sawtooth",prog:[[57,"m"],[53,"M"],[55,"M"],[52,"m"]],arp:[0,1,2,3,2,1,2,3],drum:1},
-  {t:"Last Lap",bpm:146,w:"sawtooth",prog:[[50,"m"],[46,"M"],[53,"M"],[48,"M"]],arp:[0,2,3,2,0,1,3,1],drum:1}],
- win:[
-  {t:"Victory Lap",bpm:132,w:"square",prog:[[60,"M"],[65,"M"],[67,"M"],[60,"M"]],arp:[0,1,2,3,2,3,2,1],drum:1}],
- lose:[
-  {t:"Try Again",bpm:78,w:"triangle",prog:[[57,"m"],[53,"M"],[50,"m"],[52,"m"]],arp:[0,1,2,1,0,1,2,1],drum:0}]
-};
 SYN.all=[].concat(SYN.home,SYN.q1,SYN.q2,SYN.q3,SYN.win);
 const bgm=new Audio();bgm.preload="auto";
 let scn="home",curKey="home",playing=null,userPaused=false,fade=null,curVol=0,sRate=1;
