@@ -54,8 +54,8 @@ function unlock(){try{ctx()}catch(e){}startMusic()}
 // Add as many songs as you like. "title" is what the player sees, "file" is the path.
 // Songs play in order, then loop back to the first. Music is never restarted by the quiz.
 const PLAYLIST=[
- {title:"Soviet Connection",file:"Soviet Connection/Soviet Connection.mp3"},
- {title:"Welcome to Los Santos",file:"Welcome-to-Los-Santos/Welcome-to-Los-Santos.mp3"}
+ {title:"Soviet Connection",file:"Soviet Connection.mp3"},
+ {title:"Welcome to Los Santos",file:"Welcome-to-Los-Santos.mp3"}
 ];
 const SHUFFLE_SONGS=false;   // set to true to play them in random order
 
