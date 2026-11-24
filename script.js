@@ -41,8 +41,10 @@ function buzz(){try{if(cfg.rumble&&cfg.pad&&padRef&&padRef.vibrationActuator)pad
 // Put your songs in "all" for one continuous playlist, or in the other scenes for music that changes by stage.
 // Add your own files per scene: ["Title","Soundtrack/file.mp3"]  (or just "Soundtrack/file.mp3").
 // Built-in original chiptune tunes are used too, unless you turn them off in Settings.
+
 const TRACKS={
- all:[["Soviet Connection","Soundtrack/Soviet%20Connection.mp3"],["Welcome to Los Santos","Soundtrack/Welcome-to-Los-Santos.mp3"]],   // plays all the way through (title screen, questions, results)
+ all:["Soviet Connection","Soundtrack/Soviet Connection.mp3"], ["Welcome to Los Santos","Soundtrack/Welcome-to-Los-Santos.mp3"]
+
  home:[],
  q1:[],
  q2:[],
@@ -50,6 +52,7 @@ const TRACKS={
  win:[],
  lose:[]
 };
+
 const LAB={all:"",home:"HOME",q1:"QUIZ 1",q2:"QUIZ 2",q3:"FINAL",win:"WIN",lose:"TRY AGAIN"};
 const SCENE_VOL={home:1,q1:.55,q2:.55,q3:.65,win:.9,lose:.8};
 // built-in tunes: bpm, wave, chord progression [midi root, type] per bar, arpeggio pattern, drums on/off
