@@ -52,6 +52,10 @@ tr.me td{color:var(--yellow)}
 .rank.sm{font-size:.6rem;color:var(--cyan)}
 .rank.gold{font-size:.6rem;color:var(--yellow)}
 .note{font-size:.55rem;color:var(--dim);margin:10px 0 0;line-height:1.8}
+.missed{font-size:.6rem;line-height:1.9;margin-top:14px}
+.missed b{display:block;font-weight:400;color:var(--yellow)}
+.missed p{margin:6px 0;color:var(--dim)}
+.missed span{color:var(--green)}
 .padhint{display:none}
 body.padmode .padhint{display:block}
 .badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
