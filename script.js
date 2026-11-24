@@ -57,7 +57,6 @@ const PLAYLIST=[
  {title:"Soviet Connection",file:"Soviet Connection/Soviet Connection.mp3"},
  {title:"Welcome to Los Santos",file:"Welcome-to-Los-Santos/Welcome-to-Los-Santos.mp3"}
 ];
-const SHUFFLE_SONGS=false;   // set to true to play them in random order
 
 let plOrder=PLAYLIST.map((_,i)=>i),pos=0,failed=0;
 if(SHUFFLE_SONGS)plOrder=shuffle(plOrder);
