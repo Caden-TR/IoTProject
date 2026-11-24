@@ -57,6 +57,7 @@ const PLAYLIST=[
  {title:"Soviet Connection",file:"Soviet Connection/Soviet Connection.mp3"},
  {title:"Welcome to Los Santos",file:"Welcome-to-Los-Santos/Welcome-to-Los-Santos.mp3"}
 ];
+const SHUFFLE_SONGS=false;   // set to true to play them in random order
 
 let plOrder=PLAYLIST.map((_,i)=>i),pos=0,failed=0;
 if(SHUFFLE_SONGS)plOrder=shuffle(plOrder);
@@ -76,8 +77,16 @@ function updateTitle(){
   try{navigator.mediaSession.metadata=new MediaMetadata({title:songTitle(),artist:"CyberQuiz"})}catch(e){}
  }
 }
+
+// paths tried in order for each song, in case the folder layout is slightly different
+function candidates(f){
+ const base=f.split("/").pop();
+ return [f,"Soundtrack/"+base,base,"./"+f].filter((v,i,a)=>a.indexOf(v)===i);
+}
+let tryN=0;
 function loadSong(){
- music.src=PLAYLIST[plOrder[pos]].file;
+ tryN=0;
+ music.src=candidates(PLAYLIST[plOrder[pos]].file)[0];
  if(PLAYLIST.length>1)pre.src=PLAYLIST[plOrder[(pos+1)%plOrder.length]].file;
  updateTitle();
 }
@@ -95,12 +104,27 @@ function pickSong(i){   // jump straight to a song from the dropdown
 }
 
 music.addEventListener("ended",()=>{failed=0;goSong(1)});   // song finished: play the next one
-music.addEventListener("playing",()=>{failed=0;stopGestureWatch()});
-// a missing or broken file skips to the next song; if every file fails, stop instead of looping forever
+music.addEventListener("playing",()=>{
+ failed=0;stopGestureWatch();
+ const t=$("cs-mt"),o=t&&t.options[plOrder[pos]];
+ if(o)o.textContent="♪ "+PLAYLIST[plOrder[pos]].title;
+});
+// a missing or broken file: try the other likely locations, then mark it in the menu and skip to the next song
 music.addEventListener("error",()=>{
+ const song=PLAYLIST[plOrder[pos]],list=candidates(song.file);
+ tryN++;
+ if(tryN<list.length){   // try the next possible location for this same song
+  music.src=list[tryN];
+  if(cfg.music)music.play().catch(()=>{});
+  return;
+ }
+ const c=music.error?music.error.code:0;
+ const why=c===4?"not found / unsupported":c===2?"network error":c===3?"decode error":"error";
+ console.warn("Music failed ("+why+"). Last address tried:",music.src);
+ const t=$("cs-mt"),o=t&&t.options[plOrder[pos]];
+ if(o)o.textContent="⚠ "+song.title+" ("+why+")";
  failed++;
  if(PLAYLIST.length>1&&failed<PLAYLIST.length)goSong(1);
- else console.warn("Music file could not be loaded:",music.src);
 });
 
 function startMusic(){
