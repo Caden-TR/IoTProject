@@ -38,6 +38,7 @@ function buzz(){try{if(cfg.rumble&&cfg.pad&&padRef&&padRef.vibrationActuator)pad
 // Add your own files per scene: ["Title","music/file.mp3"]  (or just "music/file.mp3").
 // Built-in original chiptune tunes are used too, unless you turn them off in Settings.
 const TRACKS={
+ all:[["Song One","Soviet Connection.mp3"],["Song Two","Welcome-to-Los-Santos.mp3"]
  home:[],
  q1:[],
  q2:[],
