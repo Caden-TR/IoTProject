@@ -50,15 +50,16 @@ function buzz(){try{if(cfg.rumble&&cfg.pad&&padRef&&padRef.vibrationActuator)pad
 // sound effects and music need the audio woken up by a click, key press or controller button
 function unlock(){try{ctx()}catch(e){}startMusic()}
 
-// ================= BACKGROUND SOUNDTRACK =================
+// ================= BACKGROUND SOUNDTRACK (playlist) =================
 // Add as many songs as you like. "title" is what the player sees, "file" is the path.
+// Songs play in order, then loop back to the first. Music is never restarted by the quiz.
 const PLAYLIST=[
  {title:"Soviet Connection",file:"Soviet Connection/Soviet Connection.mp3"},
  {title:"Welcome to Los Santos",file:"Welcome-to-Los-Santos/Welcome-to-Los-Santos.mp3"}
 ];
 const SHUFFLE_SONGS=false;   // set to true to play them in random order
 
-let plOrder=PLAYLIST.map((_,i)=>i),pos=0;
+let plOrder=PLAYLIST.map((_,i)=>i),pos=0,failed=0;
 if(SHUFFLE_SONGS)plOrder=shuffle(plOrder);
 
 const music=new Audio();
@@ -66,9 +67,21 @@ music.preload="auto";
 music.volume=cfg.musicVol;
 music.loop=PLAYLIST.length===1;   // a single song just repeats itself
 
+const pre=new Audio();            // quietly downloads the next song so the switch is instant
+pre.preload="auto";pre.muted=true;
+
 function songTitle(){return PLAYLIST[plOrder[pos]].title}
-function updateTitle(){const t=$("cs-mt");if(t){t.textContent="♪ "+songTitle();t.title=songTitle()}}
-function loadSong(){music.src=PLAYLIST[plOrder[pos]].file;updateTitle()}
+function updateTitle(){
+ const t=$("cs-mt");if(t)t.value=plOrder[pos];
+ if("mediaSession" in navigator&&window.MediaMetadata){
+  try{navigator.mediaSession.metadata=new MediaMetadata({title:songTitle(),artist:"CyberQuiz"})}catch(e){}
+ }
+}
+function loadSong(){
+ music.src=PLAYLIST[plOrder[pos]].file;
+ if(PLAYLIST.length>1)pre.src=PLAYLIST[plOrder[(pos+1)%plOrder.length]].file;
+ updateTitle();
+}
 function goSong(d){   // d = 1 for next, -1 for previous
  pos+=d;
  if(pos>=plOrder.length){pos=0;if(SHUFFLE_SONGS)plOrder=shuffle(plOrder)}
@@ -76,18 +89,45 @@ function goSong(d){   // d = 1 for next, -1 for previous
  loadSong();
  if(cfg.music)music.play().catch(()=>{});
 }
-music.addEventListener("ended",()=>goSong(1));
-// if a file is missing or won't play, skip to the next one instead of going silent
-music.addEventListener("error",()=>{if(PLAYLIST.length>1)goSong(1)});
-loadSong();
+function pickSong(i){   // jump straight to a song from the dropdown
+ pos=Math.max(0,plOrder.indexOf(i));
+ loadSong();cfg.music=true;commit();
+ music.play().catch(()=>{});
+}
+
+music.addEventListener("ended",()=>{failed=0;goSong(1)});   // song finished: play the next one
+music.addEventListener("playing",()=>{failed=0;stopGestureWatch()});
+// a missing or broken file skips to the next song; if every file fails, stop instead of looping forever
+music.addEventListener("error",()=>{
+ failed++;
+ if(PLAYLIST.length>1&&failed<PLAYLIST.length)goSong(1);
+ else console.warn("Music file could not be loaded:",music.src);
+});
 
 function startMusic(){
  music.volume=cfg.musicVol;
  if(!cfg.music){music.pause();return}
  if(music.paused)music.play().catch(()=>{});
 }
-// browsers block audio until the player interacts, so start on the first click, tap or key press
-["pointerdown","keydown","touchstart"].forEach(ev=>addEventListener(ev,startMusic));
+
+// Browsers only allow sound after the player does something. So: try straight away,
+// and if the browser says no, start on the very first click, tap, key press or controller button.
+const GESTURES=["pointerdown","keydown","touchstart","click"];
+function stopGestureWatch(){GESTURES.forEach(ev=>removeEventListener(ev,startMusic,true))}
+GESTURES.forEach(ev=>addEventListener(ev,startMusic,true));
+// if the browser paused the music while the tab was in the background, bring it back
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)startMusic()});
+
+// song name + media keys in the operating system's media controls
+if("mediaSession" in navigator){
+ const set=(a,f)=>{try{navigator.mediaSession.setActionHandler(a,f)}catch(e){}};
+ set("play",()=>{cfg.music=true;commit()});
+ set("pause",()=>{cfg.music=false;commit()});
+ if(PLAYLIST.length>1){set("nexttrack",()=>goSong(1));set("previoustrack",()=>goSong(-1))}
+}
+
+loadSong();
+startMusic();   // try to start the moment the game opens
 
 // ================= SETTINGS PANEL (built by script) =================
 const rowsRefresh=[];
@@ -135,8 +175,9 @@ const STYLE=`
 #cs-pad{position:fixed;top:12px;left:10px;z-index:50;font-size:.9em;color:var(--good,#39ff88)}
 #cs-mp{position:fixed;left:10px;bottom:10px;z-index:50;display:flex;align-items:center;gap:6px;max-width:calc(100vw - 20px);background:var(--panel,#170a3d);border:3px solid var(--a,#22f0ff);border-radius:var(--r,0);padding:5px 8px;color:var(--ink,#f4f0ff);font-size:.8em}
 #cs-mp .cs-btn{min-height:30px;min-width:30px;padding:2px 8px;font-size:1em;border-width:2px}
-#cs-mt{max-width:150px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--c,#ffe600)}
+#cs-mt{max-width:150px;min-width:0;font:inherit;font-size:1em;background:var(--input,#000);color:var(--c,#ffe600);border:2px solid var(--b,#ff2ec4);border-radius:var(--r,0);padding:3px}
 #cs-mv{width:70px;min-width:0;accent-color:var(--b,#ff2ec4)}
+@media (max-width:480px){#cs-mt{max-width:95px}#cs-mv{width:50px}}
 #cs-ov{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.85);overflow:auto;padding:14px}
 #cs-ov[hidden]{display:none}
 #cs-pn{max-width:540px;margin:0 auto;background:var(--panel,#170a3d);border:var(--bw,4px) solid var(--a,#22f0ff);border-radius:var(--r,0);padding:16px;color:var(--ink,#f4f0ff);line-height:1.7}
@@ -150,7 +191,7 @@ const STYLE=`
 .cs-btn:hover{background:var(--b,#ff2ec4);color:var(--onb,#fff)}
 .cs-btn.on{background:var(--c,#ffe600);color:var(--onc,#000);border-color:var(--c,#ffe600)}
 .cs-close{display:block;width:100%;margin-top:16px;background:var(--good,#39ff88);color:var(--ong,#000);border-color:var(--good,#39ff88);font-size:1.1em}
-.cs-btn:focus-visible,#cs-pn select:focus-visible,#cs-pn input:focus-visible,#cs-mv:focus-visible,body.cs-padmode button:focus,body.cs-padmode select:focus,body.cs-padmode input:focus{outline:4px solid var(--c,#ffe600);outline-offset:3px}
+.cs-btn:focus-visible,#cs-pn select:focus-visible,#cs-pn input:focus-visible,#cs-mt:focus-visible,#cs-mv:focus-visible,body.cs-padmode button:focus,body.cs-padmode select:focus,body.cs-padmode input:focus{outline:4px solid var(--c,#ffe600);outline-offset:3px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 `;
 function openSettings(){
@@ -159,13 +200,15 @@ function openSettings(){
 }
 function closeSettings(){ov.hidden=true;paused=false;gear.focus()}
 
-// mini music player, bottom left of the screen
+// mini music player, bottom left of the screen (visible on home, quiz and results)
 function buildPlayer(){
- const prev=h("button",{className:"cs-btn",textContent:"⏮",title:"Previous song","aria-label":"Previous song",onclick:()=>goSong(-1)});
- const play=h("button",{className:"cs-btn",title:"Play / pause music",onclick:()=>{cfg.music=!cfg.music;commit()}});
- const next=h("button",{className:"cs-btn",textContent:"⏭",title:"Next song","aria-label":"Next song",onclick:()=>goSong(1)});
- const ttl=h("span",{id:"cs-mt"});
- const vol=h("input",{id:"cs-mv",type:"range",min:0,max:1,step:.05,value:cfg.musicVol,title:"Music volume",oninput:()=>{cfg.musicVol=+vol.value;commit()}});
+ const prev=h("button",{className:"cs-btn",textContent:"⏮",title:"Previous song (P)","aria-label":"Previous song",onclick:()=>goSong(-1)});
+ const play=h("button",{className:"cs-btn",title:"Play / pause music (M)",onclick:()=>{cfg.music=!cfg.music;commit()}});
+ const next=h("button",{className:"cs-btn",textContent:"⏭",title:"Next song (N)","aria-label":"Next song",onclick:()=>goSong(1)});
+ const ttl=h("select",{id:"cs-mt",title:"Choose song",onchange:()=>{pickSong(+ttl.value);ttl.blur()}});   // blur so keys 1-4 keep working in the quiz
+ PLAYLIST.forEach((s,i)=>ttl.append(h("option",{value:i,textContent:"♪ "+s.title})));
+ ttl.setAttribute("aria-label","Choose song");
+ const vol=h("input",{id:"cs-mv",type:"range",min:0,max:1,step:.05,value:cfg.musicVol,title:"Music volume (+ / -)",oninput:()=>{cfg.musicVol=+vol.value;commit()}});
  vol.setAttribute("aria-label","Music volume");
  rowsRefresh.push(()=>{play.textContent=cfg.music?"⏸":"▶";play.setAttribute("aria-label",cfg.music?"Pause music":"Play music");vol.value=cfg.musicVol});
  mp=h("div",{id:"cs-mp",role:"group","aria-label":"Music player"},
@@ -193,8 +236,8 @@ const pn=h("div",{id:"cs-pn",role:"dialog","aria-modal":"true","aria-label":"Set
   tog("Keyboard controls","kbd"),
   tog("Controller controls","pad"),
   tog("Controller vibration","rumble"),
-  h("p",{textContent:"KEYBOARD: 1-4 answer · arrows move · Enter select · Esc or S settings · M mute music"}),
-  h("p",{textContent:"CONTROLLER: D-pad or stick move · A select · A/B/X/Y answer · Start play · Select settings"}),
+  h("p",{textContent:"KEYBOARD: 1-4 answer · arrows move · Enter select · Esc or S settings · M mute · N/P next/previous song · +/- volume"}),
+  h("p",{textContent:"CONTROLLER: D-pad or stick move · A select · A/B/X/Y answer · Start play · Select settings · LB/RB change song"}),
   h("p",{textContent:"MOUSE: click anything"}),
   sec("🕹 GAMEPLAY (next game)"),
   sel("Seconds per question","time",[[10,"10"],[15,"15"],[20,"20"],[30,"30"]]),
@@ -236,6 +279,10 @@ addEventListener("keydown",e=>{
  if(typing||tag==="SELECT")return;
  const k=e.key.toLowerCase();
  if(k==="m"){cfg.music=!cfg.music;commit();return}
+ if(k==="n"){goSong(1);return}
+ if(k==="p"){goSong(-1);return}
+ if(k==="+"||k==="="){cfg.musicVol=Math.min(1,+(cfg.musicVol+.1).toFixed(2));commit();return}
+ if(k==="-"){cfg.musicVol=Math.max(0,+(cfg.musicVol-.1).toFixed(2));commit();return}
  if(k==="s"&&!open){openSettings();return}
  const d={arrowup:"up",arrowdown:"down",arrowleft:"left",arrowright:"right"}[k];
  if(d&&(tag==="BUTTON"||tag==="BODY")){e.preventDefault();move(d);return}
@@ -251,6 +298,8 @@ const PADMAP={a:0,b:1,x:2,y:3,lb:4,rb:5,select:8,start:9,up:12,down:13,left:14,r
 let prevPad={},holdPad={},padRef=null,polling=false;
 function press(k){
  if(!cfg.pad)return;
+ if(k==="lb")return goSong(-1);   // shoulder buttons change song on any screen
+ if(k==="rb")return goSong(1);
  const open=!!ov&&!ov.hidden;
  if(k==="select")return open?closeSettings():openSettings();
  const a=document.activeElement;
