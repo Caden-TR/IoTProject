@@ -51,31 +51,34 @@ function buzz(){try{if(cfg.rumble&&cfg.pad&&padRef&&padRef.vibrationActuator)pad
 function unlock(){try{ctx()}catch(e){}startMusic()}
 
 // ================= BACKGROUND SOUNDTRACK =================
-// Add as many songs as you like. They play in order, then start over.
+// Add as many songs as you like. "title" is what the player sees, "file" is the path.
 const PLAYLIST=[
- "Soviet Connection/Soviet Connection.mp3",
- "Welcome-to-Los-Santos/Welcome-to-Los-Santos.mp3",
+ {title:"Soviet Connection",file:"Soviet Connection/Soviet Connection.mp3"},
+ {title:"Welcome to Los Santos",file:"Welcome-to-Los-Santos/Welcome-to-Los-Santos.mp3"}
 ];
 const SHUFFLE_SONGS=false;   // set to true to play them in random order
 
-let order=PLAYLIST.map((_,i)=>i),pos=0;
-if(SHUFFLE_SONGS)order=shuffle(order);
+let plOrder=PLAYLIST.map((_,i)=>i),pos=0;
+if(SHUFFLE_SONGS)plOrder=shuffle(plOrder);
 
 const music=new Audio();
 music.preload="auto";
 music.volume=cfg.musicVol;
 music.loop=PLAYLIST.length===1;   // a single song just repeats itself
 
-function loadSong(){music.src=PLAYLIST[order[pos]]}
-function nextSong(){
- pos++;
- if(pos>=order.length){pos=0;if(SHUFFLE_SONGS)order=shuffle(order)}
+function songTitle(){return PLAYLIST[plOrder[pos]].title}
+function updateTitle(){const t=$("cs-mt");if(t){t.textContent="♪ "+songTitle();t.title=songTitle()}}
+function loadSong(){music.src=PLAYLIST[plOrder[pos]].file;updateTitle()}
+function goSong(d){   // d = 1 for next, -1 for previous
+ pos+=d;
+ if(pos>=plOrder.length){pos=0;if(SHUFFLE_SONGS)plOrder=shuffle(plOrder)}
+ if(pos<0)pos=plOrder.length-1;
  loadSong();
  if(cfg.music)music.play().catch(()=>{});
 }
-music.addEventListener("ended",nextSong);
+music.addEventListener("ended",()=>goSong(1));
 // if a file is missing or won't play, skip to the next one instead of going silent
-music.addEventListener("error",()=>{if(PLAYLIST.length>1)nextSong()});
+music.addEventListener("error",()=>{if(PLAYLIST.length>1)goSong(1)});
 loadSong();
 
 function startMusic(){
@@ -85,9 +88,10 @@ function startMusic(){
 }
 // browsers block audio until the player interacts, so start on the first click, tap or key press
 ["pointerdown","keydown","touchstart"].forEach(ev=>addEventListener(ev,startMusic));
+
 // ================= SETTINGS PANEL (built by script) =================
 const rowsRefresh=[];
-let gear=null,ov=null,padTag=null;
+let gear=null,ov=null,padTag=null,mp=null;
 function h(t,p,...k){
  const e=document.createElement(t);
  if(p)Object.keys(p).forEach(n=>{if(n==="role"||n.indexOf("aria-")===0)e.setAttribute(n,p[n]);else e[n]=p[n]});
@@ -129,6 +133,10 @@ function confirmBtn(label,action){
 const STYLE=`
 #cs-gear{position:fixed;top:10px;right:10px;z-index:50;font-size:1.3em;padding:8px 12px;text-align:center}
 #cs-pad{position:fixed;top:12px;left:10px;z-index:50;font-size:.9em;color:var(--good,#39ff88)}
+#cs-mp{position:fixed;left:10px;bottom:10px;z-index:50;display:flex;align-items:center;gap:6px;max-width:calc(100vw - 20px);background:var(--panel,#170a3d);border:3px solid var(--a,#22f0ff);border-radius:var(--r,0);padding:5px 8px;color:var(--ink,#f4f0ff);font-size:.8em}
+#cs-mp .cs-btn{min-height:30px;min-width:30px;padding:2px 8px;font-size:1em;border-width:2px}
+#cs-mt{max-width:150px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--c,#ffe600)}
+#cs-mv{width:70px;min-width:0;accent-color:var(--b,#ff2ec4)}
 #cs-ov{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.85);overflow:auto;padding:14px}
 #cs-ov[hidden]{display:none}
 #cs-pn{max-width:540px;margin:0 auto;background:var(--panel,#170a3d);border:var(--bw,4px) solid var(--a,#22f0ff);border-radius:var(--r,0);padding:16px;color:var(--ink,#f4f0ff);line-height:1.7}
@@ -142,7 +150,7 @@ const STYLE=`
 .cs-btn:hover{background:var(--b,#ff2ec4);color:var(--onb,#fff)}
 .cs-btn.on{background:var(--c,#ffe600);color:var(--onc,#000);border-color:var(--c,#ffe600)}
 .cs-close{display:block;width:100%;margin-top:16px;background:var(--good,#39ff88);color:var(--ong,#000);border-color:var(--good,#39ff88);font-size:1.1em}
-.cs-btn:focus-visible,#cs-pn select:focus-visible,#cs-pn input:focus-visible,body.cs-padmode button:focus,body.cs-padmode select:focus,body.cs-padmode input:focus{outline:4px solid var(--c,#ffe600);outline-offset:3px}
+.cs-btn:focus-visible,#cs-pn select:focus-visible,#cs-pn input:focus-visible,#cs-mv:focus-visible,body.cs-padmode button:focus,body.cs-padmode select:focus,body.cs-padmode input:focus{outline:4px solid var(--c,#ffe600);outline-offset:3px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 `;
 function openSettings(){
@@ -150,6 +158,22 @@ function openSettings(){
  ov.hidden=false;apply();ov.querySelector(".cs-close").focus();
 }
 function closeSettings(){ov.hidden=true;paused=false;gear.focus()}
+
+// mini music player, bottom left of the screen
+function buildPlayer(){
+ const prev=h("button",{className:"cs-btn",textContent:"⏮",title:"Previous song","aria-label":"Previous song",onclick:()=>goSong(-1)});
+ const play=h("button",{className:"cs-btn",title:"Play / pause music",onclick:()=>{cfg.music=!cfg.music;commit()}});
+ const next=h("button",{className:"cs-btn",textContent:"⏭",title:"Next song","aria-label":"Next song",onclick:()=>goSong(1)});
+ const ttl=h("span",{id:"cs-mt"});
+ const vol=h("input",{id:"cs-mv",type:"range",min:0,max:1,step:.05,value:cfg.musicVol,title:"Music volume",oninput:()=>{cfg.musicVol=+vol.value;commit()}});
+ vol.setAttribute("aria-label","Music volume");
+ rowsRefresh.push(()=>{play.textContent=cfg.music?"⏸":"▶";play.setAttribute("aria-label",cfg.music?"Pause music":"Play music");vol.value=cfg.musicVol});
+ mp=h("div",{id:"cs-mp",role:"group","aria-label":"Music player"},
+  PLAYLIST.length>1?[prev,play,next]:[play],ttl,vol);
+ document.body.append(mp);
+ updateTitle();
+}
+
 function buildSettings(){
  document.head.append(h("style",{textContent:STYLE}));
  gear=h("button",{id:"cs-gear",className:"cs-btn",textContent:"⚙",title:"Settings (Esc)","aria-label":"Settings",onclick:openSettings});
@@ -184,6 +208,7 @@ const pn=h("div",{id:"cs-pn",role:"dialog","aria-modal":"true","aria-label":"Set
   h("button",{className:"cs-btn cs-close",textContent:"✔ CLOSE",onclick:closeSettings}));
  ov=h("div",{id:"cs-ov",hidden:true,onclick:e=>{if(e.target===ov)closeSettings()}},pn);
  document.body.append(gear,padTag,ov);
+ buildPlayer();
  apply();
 }
 
