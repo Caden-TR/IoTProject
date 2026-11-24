@@ -173,11 +173,10 @@ function confirmBtn(label,action){
 const STYLE=`
 #cs-gear{position:fixed;top:10px;right:10px;z-index:50;font-size:1.3em;padding:8px 12px;text-align:center}
 #cs-pad{position:fixed;top:12px;left:10px;z-index:50;font-size:.9em;color:var(--good,#39ff88)}
-#cs-mp{position:fixed;left:10px;bottom:10px;z-index:50;display:flex;align-items:center;gap:6px;max-width:calc(100vw - 20px);background:var(--panel,#170a3d);border:3px solid var(--a,#22f0ff);border-radius:var(--r,0);padding:5px 8px;color:var(--ink,#f4f0ff);font-size:.8em}
+#cs-mp{position:fixed;left:10px;bottom:10px;z-index:50;display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:calc(100vw - 20px);background:var(--panel,#170a3d);border:3px solid var(--a,#22f0ff);border-radius:var(--r,0);padding:6px 8px;color:var(--ink,#f4f0ff);font-size:.8em}
 #cs-mp .cs-btn{min-height:30px;min-width:30px;padding:2px 8px;font-size:1em;border-width:2px}
-#cs-mt{max-width:150px;min-width:0;font:inherit;font-size:1em;background:var(--input,#000);color:var(--c,#ffe600);border:2px solid var(--b,#ff2ec4);border-radius:var(--r,0);padding:3px}
+#cs-mt{flex:1 1 210px;min-width:170px;max-width:320px;font:inherit;font-size:1.15em;background:var(--input,#000);color:var(--c,#ffe600);border:2px solid var(--b,#ff2ec4);border-radius:var(--r,0);padding:5px 6px;text-overflow:ellipsis}
 #cs-mv{width:70px;min-width:0;accent-color:var(--b,#ff2ec4)}
-@media (max-width:480px){#cs-mt{max-width:95px}#cs-mv{width:50px}}
 #cs-ov{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.85);overflow:auto;padding:14px}
 #cs-ov[hidden]{display:none}
 #cs-pn{max-width:540px;margin:0 auto;background:var(--panel,#170a3d);border:var(--bw,4px) solid var(--a,#22f0ff);border-radius:var(--r,0);padding:16px;color:var(--ink,#f4f0ff);line-height:1.7}
