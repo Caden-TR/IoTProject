@@ -10,7 +10,20 @@ function show(id){["start","game","end"].forEach(s=>$(s).classList.toggle("hide"
 
 // ================= SETTINGS DATA =================
 const SKEY="cyberquiz-settings";
-const DEF={sfx:true,sfxVol:.7,theme:"neon",big:false,kbd:true,pad:true,rumble:true,time:15,round:10,delay:1700};
+const DEF={
+ music:true,
+ musicVol:.5,
+ sfx:true,
+ sfxVol:.7,
+ theme:"neon",
+ big:false,
+ kbd:true,
+ pad:true,
+ rumble:true,
+ time:15,
+ round:10,
+ delay:1700
+};
 let cfg=Object.assign({},DEF);
 try{
  const o=JSON.parse(localStorage.getItem(SKEY)||"null");
@@ -22,8 +35,8 @@ function saveCfg(){clearTimeout(saveT);saveT=setTimeout(writeCfg,300)}
 addEventListener("pagehide",()=>{if(saveT)writeCfg()});
 const THEMES=[["neon","Neon Arcade"],["sunset","Sunset"],["ocean","Ocean"],["forest","Forest"],["candy","Candy"],["retro","Retro Green"],["light","Light"],["contrast","High Contrast"]];
 
-// ================= AUDIO ENGINE =================
-let ac=null,mg=null;
+// ================= AUDIO ENGINE (sound effects) =================
+let ac=null;
 function ctx(){if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();}if(ac.state==="suspended")ac.resume();return ac}
 function beep(f,d=.12,at=0){
  if(!cfg.sfx||cfg.sfxVol<=0)return;
@@ -34,9 +47,44 @@ function beep(f,d=.12,at=0){
 const jingle=a=>a.forEach((f,i)=>beep(f,.14,i*.13));
 function buzz(){try{if(cfg.rumble&&cfg.pad&&padRef&&padRef.vibrationActuator)padRef.vibrationActuator.playEffect("dual-rumble",{duration:200,strongMagnitude:.7,weakMagnitude:.3}).catch(()=>{})}catch(e){}}
 
-// sound effects only need the audio context woken up by a click, key press or controller button
-function unlock(){try{ctx()}catch(e){}}
+// sound effects and music need the audio woken up by a click, key press or controller button
+function unlock(){try{ctx()}catch(e){}startMusic()}
 
+// ================= BACKGROUND SOUNDTRACK =================
+// Add as many songs as you like. They play in order, then start over.
+const PLAYLIST=[
+ "Soviet Connection/Soviet Connection.mp3",
+ "Welcome-to-Los-Santos/Welcome-to-Los-Santos.mp3",
+];
+const SHUFFLE_SONGS=false;   // set to true to play them in random order
+
+let order=PLAYLIST.map((_,i)=>i),pos=0;
+if(SHUFFLE_SONGS)order=shuffle(order);
+
+const music=new Audio();
+music.preload="auto";
+music.volume=cfg.musicVol;
+music.loop=PLAYLIST.length===1;   // a single song just repeats itself
+
+function loadSong(){music.src=PLAYLIST[order[pos]]}
+function nextSong(){
+ pos++;
+ if(pos>=order.length){pos=0;if(SHUFFLE_SONGS)order=shuffle(order)}
+ loadSong();
+ if(cfg.music)music.play().catch(()=>{});
+}
+music.addEventListener("ended",nextSong);
+// if a file is missing or won't play, skip to the next one instead of going silent
+music.addEventListener("error",()=>{if(PLAYLIST.length>1)nextSong()});
+loadSong();
+
+function startMusic(){
+ music.volume=cfg.musicVol;
+ if(!cfg.music){music.pause();return}
+ if(music.paused)music.play().catch(()=>{});
+}
+// browsers block audio until the player interacts, so start on the first click, tap or key press
+["pointerdown","keydown","touchstart"].forEach(ev=>addEventListener(ev,startMusic));
 // ================= SETTINGS PANEL (built by script) =================
 const rowsRefresh=[];
 let gear=null,ov=null,padTag=null;
@@ -49,6 +97,7 @@ function commit(){saveCfg();apply()}
 function apply(){
  document.documentElement.dataset.theme=cfg.theme;
  document.documentElement.style.setProperty("--fs",cfg.big?"15px":"");
+ startMusic();
  startPoll();rowsRefresh.forEach(f=>f());
 }
 
@@ -107,7 +156,9 @@ function buildSettings(){
  padTag=h("span",{id:"cs-pad",textContent:"🎮 CONTROLLER",hidden:true});
 const pn=h("div",{id:"cs-pn",role:"dialog","aria-modal":"true","aria-label":"Settings"},
   h("h2",{textContent:"⚙ SETTINGS"}),
-  sec("🔊 SOUND EFFECTS"),
+  sec("🔊 SOUND"),
+  tog("Music","music"),
+  sld("Music volume","musicVol"),
   tog("Sound effects","sfx"),
   sld("Effects volume","sfxVol",()=>jingle([660,880])),
   h("div",{className:"cs-r"},h("button",{className:"cs-btn",textContent:"TEST SOUND",onclick:()=>jingle([523,659,784])})),
@@ -118,7 +169,7 @@ const pn=h("div",{id:"cs-pn",role:"dialog","aria-modal":"true","aria-label":"Set
   tog("Keyboard controls","kbd"),
   tog("Controller controls","pad"),
   tog("Controller vibration","rumble"),
-  h("p",{textContent:"KEYBOARD: 1-4 answer · arrows move · Enter select · Esc or S settings · M mute secret music"}),
+  h("p",{textContent:"KEYBOARD: 1-4 answer · arrows move · Enter select · Esc or S settings · M mute music"}),
   h("p",{textContent:"CONTROLLER: D-pad or stick move · A select · A/B/X/Y answer · Start play · Select settings"}),
   h("p",{textContent:"MOUSE: click anything"}),
   sec("🕹 GAMEPLAY (next game)"),
@@ -159,8 +210,8 @@ addEventListener("keydown",e=>{
  const t=e.target,tag=t.tagName,typing=(tag==="INPUT"&&t.type!=="range")||tag==="TEXTAREA";
  if(typing||tag==="SELECT")return;
  const k=e.key.toLowerCase();
- if(k==="m"){if(eggOut)eggOut.gain.value=eggOut.gain.value?0:.5;return}
-if(k==="s"&&!open){openSettings();return}
+ if(k==="m"){cfg.music=!cfg.music;commit();return}
+ if(k==="s"&&!open){openSettings();return}
  const d={arrowup:"up",arrowdown:"down",arrowleft:"left",arrowright:"right"}[k];
  if(d&&(tag==="BUTTON"||tag==="BODY")){e.preventDefault();move(d);return}
  if(open)return;
@@ -219,30 +270,14 @@ function poll(){   // only runs while a controller is connected
 
 // ================= SECRET NAMES (easter eggs) =================
 // Type the code as the player name, then press PLAY. Add more codes here.
-// This is the ONLY music in the game. It is an original tune made with the browser's sound engine (no audio files).
 const EGGS={"V":{msg:"★ SECRET MODE: WELCOME, V ★"}};
-let eggStopFn=null,eggOut=null,subText="";
-function chiptune(){
- const a=ctx();eggOut=a.createGain();eggOut.gain.value=.5;eggOut.connect(a.destination);
- const out=eggOut;
- const chords=[[220,261.63,329.63],[174.61,220,261.63],[261.63,329.63,392],[196,246.94,293.66]]; // Am F C G
- const pat=[0,1,2,1,0,1,2,1];let i=0;
- const tone=(f,type,vol,len)=>{const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=f;
-  g.gain.setValueAtTime(vol,a.currentTime);g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+len);
-  o.connect(g);g.connect(out);o.start();o.stop(a.currentTime+len)};
- const id=setInterval(()=>{if(document.hidden)return;const c=chords[Math.floor(i/8)%4];
-  tone(c[pat[i%8]]*(i%8===4?2:1),"square",0.07,0.13);
-  if(i%4===0)tone(c[0]/2,"triangle",0.18,0.3);i++},150);
- return()=>{clearInterval(id);out.disconnect();if(eggOut===out)eggOut=null};
-}
+let subText="";
 function eggStart(code){
  eggStop();const e=EGGS[code];if(!e)return;
- try{eggStopFn=chiptune()}catch(x){eggStopFn=null}
  document.documentElement.dataset.egg="1";
  const sub=document.querySelector(".sub");subText=sub.textContent;sub.textContent=e.msg;
 }
 function eggStop(){
- if(eggStopFn){eggStopFn();eggStopFn=null}
  if(document.documentElement.dataset.egg){delete document.documentElement.dataset.egg;document.querySelector(".sub").textContent=subText}
 }
 
