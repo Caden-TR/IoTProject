@@ -42,7 +42,7 @@ const BANK={
   ["Which 2FA method is generally strongest?","A hardware security key","SMS code","Security questions","Email link only","Keys resist phishing and SIM-swapping."]]
 };
 const LEVELS={junior:"AGES 8-11",mid:"AGES 12-14",senior:"AGES 15-18"};
-const MODES={classic:["🎯","CLASSIC","10 QUESTIONS"],survival:["❤️","SURVIVAL","3 LIVES, GO FOR A RECORD"],time:["⚡","TIME ATTACK","60 SECONDS, WRONG = -5s"],practice:["📘","PRACTICE","NO TIMER, NO SCORE"]};
+const MODES={classic:["🎯","CLASSIC","10 QUESTIONS"],survival:["❤️","SURVIVAL","3 LIVES, GO FOR A RECORD"],time:["⚡","TIME ATTACK","60s CLOCK · WRONG -5s · STREAK OF 5 +3s"],practice:["📘","PRACTICE","NO TIMER, NO SCORE"]};
 const AVATARS=["🦊","🐼","🤖","🦄","🐲","👾"];
 const BADGES={first:["🎮","FIRST GAME"],perfect:["💯","PERFECT ROUND"],s5:["🔥","5 IN A ROW"],s10:["🚀","10 IN A ROW"],surv:["❤️","SURVIVOR: 12 RIGHT"],speed:["⚡","SPEED DEMON: 8 IN 60s"],all:["🌟","TRIED EVERY MODE"],pb:["📈","PERSONAL BEST"]};
 const BLOCK=["FUCK","SHIT","CUNT","BITCH","NAZI","PORN","TWAT","SLUT","WANK"];
@@ -57,7 +57,7 @@ const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(M
 const show=id=>["start","game","end"].forEach(s=>$(s).classList.toggle("hide",s!==id));
 
 // ---- ALL state is declared here, before anything runs ----
-const S={level:"junior",mode:"classic",avatar:AVATARS[0],name:"",cur:null,queue:[],idx:0,score:0,streak:0,best:0,right:0,lives:3,left:15,clock:60,fifty:0,locked:false,on:false,over:false,sure:0};
+const S={missed:[],level:"junior",mode:"classic",avatar:AVATARS[0],name:"",cur:null,queue:[],idx:0,score:0,streak:0,best:0,right:0,lives:3,left:15,clock:60,fifty:0,locked:false,on:false,over:false,sure:0};
 let timer=null,adv=null,db=null,unsub=null,myLast=null,cache=[],note="LOADING...",tabL="junior",tabM="classic";
 let sound=store("cq-sound")!=="0",ac=null,shareText="",prev={},rumble=null;
 const TIME=()=>S.level==="junior"?20:15;
@@ -79,8 +79,8 @@ function row(box,keys,cur,fn,fill){box.replaceChildren();
 const txt=f=>(b,k)=>{b.textContent=f(k)};
 function drawStart(){
  row($("avs"),AVATARS,S.avatar,k=>{S.avatar=k;store("cq-avatar",k);beep(520,.06)},txt(k=>k));
- row($("ages"),Object.keys(LEVELS),S.level,k=>{S.level=k},txt(k=>LEVELS[k]));
- row($("modes"),Object.keys(MODES),S.mode,k=>{S.mode=k},(b,k)=>b.append(el("span",MODES[k][0]+" "+MODES[k][1]),el("small",MODES[k][2])));
+ row($("ages"),Object.keys(LEVELS),S.level,k=>{S.level=k;store("cq-level",k)},txt(k=>LEVELS[k]));
+ row($("modes"),Object.keys(MODES),S.mode,k=>{S.mode=k;store("cq-mode",k)},(b,k)=>b.append(el("span",MODES[k][0]+" "+MODES[k][1]),el("small",MODES[k][2])));
 }
 function drawTabs(){
  row($("tabs"),Object.keys(LEVELS),tabL,k=>{tabL=k;renderBoard()},txt(k=>LEVELS[k]));
@@ -102,7 +102,7 @@ $("again").onclick=()=>{show("start")};
 // ---- game ----
 function start(){
  clearTimeout(adv);clearInterval(timer);
- Object.assign(S,{queue:[],idx:0,score:0,streak:0,best:0,right:0,lives:3,clock:60,fifty:S.level==="junior"?2:1,locked:false,on:true,over:false,sure:0});
+ Object.assign(S,{missed:[],queue:[],idx:0,score:0,streak:0,best:0,right:0,lives:3,clock:60,fifty:S.level==="junior"?2:1,locked:false,on:true,over:false,sure:0});
  myLast=null;$("quit").textContent="✖ QUIT";show("game");next();
  timer=setInterval(loop,250);
 }
@@ -129,7 +129,7 @@ function paint(){
  $("tm").textContent=t;f.style.width=Math.max(0,v)+"%";f.classList.toggle("low",m!=="practice"&&v<=30);
 }
 function loop(){
- if(!S.on||S.locked)return;
+ if(!S.on||S.locked||document.hidden)return;
  if(S.mode==="time"){S.clock-=.25;paint();if(S.clock<=0){finish()}}
  else if(S.mode!=="practice"){S.left-=.25;paint();if(S.left<=0)answer(null,null)}
 }
@@ -142,8 +142,9 @@ function answer(btn,val){
  S.idx++;
  if(ok){S.streak++;S.right++;S.best=Math.max(S.best,S.streak);
   const pts=m==="practice"?0:100+(t?0:Math.round(Math.max(0,S.left)/TIME()*50))+(S.streak-1)*10;S.score+=pts;
-  $("gmsg").textContent="CORRECT!"+(pts?" +"+pts:"")+(S.streak>1?"  🔥 "+S.streak+" IN A ROW!":"");beep(660,.1);beep(880,.14,.1)}
- else{S.streak=0;if(m==="survival")S.lives--;if(t)S.clock=Math.max(0,S.clock-5);buzz();beep(160,.3);
+  $("gmsg").textContent="CORRECT!"+(pts?" +"+pts:"")+(S.streak>1?"  🔥 "+S.streak+" IN A ROW!":"");beep(660,.1);beep(880,.14,.1);
+  if(t&&S.streak%5===0){S.clock=Math.min(60,S.clock+3);$("gmsg").textContent+=" +3 SECONDS"}}
+ else{S.streak=0;S.missed.push({q:x.q,c:x.c});if(m==="survival")S.lives--;if(t)S.clock=Math.max(0,S.clock-5);buzz();beep(160,.3);
   $("gmsg").textContent=(val===null?"TIME UP!":"OOPS!")+" THE ANSWER IS GREEN."+(t?" -5 SECONDS":"")}
  S.over=(m==="survival"&&S.lives<=0)||(t&&S.clock<=0)||((m==="classic"||m==="practice")&&S.idx>=ROUND);
  hud();paint();
@@ -177,6 +178,8 @@ async function finish(){
  if(Object.keys(MODES).every(k=>tried.includes(k)))aw("all");
  store("cq-badges",JSON.stringify(have));renderBadges();
  $("newb").textContent=got.length?"NEW BADGE: "+got.map(k=>BADGES[k][0]+" "+BADGES[k][1]).join(", "):"";
+ const mi=$("missed");mi.replaceChildren();
+ if(S.missed.length){mi.appendChild(el("b","REVIEW THESE:"));S.missed.slice(0,5).forEach(r=>{const p=el("p",r.q+" → ");p.appendChild(el("span",r.c));mi.appendChild(p)})}
  shareText="I scored "+S.score+" in "+MODES[m][1]+" ("+LEVELS[S.level]+") on Cyber Defender - "+g.replace(/\s\S+$/,"")+"! Can you beat me?";
  $("share").classList.toggle("hide",pr);
  jingle(ratio>=.7?[523,659,784,1047]:[392,330,262]);
@@ -268,6 +271,7 @@ function poll(){
 // ---- boot (runs last, after everything above exists) ----
 (function init(){
  const nm=store("cq-name");if(nm)$("nm").value=nm.slice(0,10);
+ const lv=store("cq-level"),md=store("cq-mode");if(LEVELS[lv])S.level=lv;if(MODES[md])S.mode=md;
  const av=store("cq-avatar");if(AVATARS.includes(av))S.avatar=av;
  if(store("cq-big")==="1"){document.documentElement.classList.add("big");$("big").setAttribute("aria-pressed","true")}
  drawSound();drawStart();drawTabs();renderBadges();
