@@ -18,12 +18,15 @@ try{
  if(o)Object.assign(cfg,o);
  else if(localStorage.getItem("cyberquiz-music")==="0")cfg.music=false;
 }catch(e){}
-function saveCfg(){try{localStorage.setItem(SKEY,JSON.stringify(cfg))}catch(e){}}
+let saveT=null;   // settings are saved 300ms after the last change, so dragging a slider doesn't hammer storage
+function writeCfg(){clearTimeout(saveT);saveT=null;try{localStorage.setItem(SKEY,JSON.stringify(cfg))}catch(e){}}
+function saveCfg(){clearTimeout(saveT);saveT=setTimeout(writeCfg,300)}
+addEventListener("pagehide",()=>{if(saveT)writeCfg()});
 const THEMES=[["neon","Neon Arcade"],["sunset","Sunset"],["ocean","Ocean"],["forest","Forest"],["candy","Candy"],["retro","Retro Green"],["light","Light"],["contrast","High Contrast"]];
 
 // ================= AUDIO ENGINE =================
 let ac=null,mg=null;
-function ctx(){ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state==="suspended")ac.resume();return ac}
+function ctx(){if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();ac.onstatechange=settle}if(ac.state==="suspended")ac.resume();return ac}
 function beep(f,d=.12,at=0){
  if(!cfg.sfx||cfg.sfxVol<=0)return;
  try{ctx();const o=ac.createOscillator(),g=ac.createGain(),t=ac.currentTime+at;o.type="square";o.frequency.value=f;
@@ -36,10 +39,11 @@ function buzz(){try{if(cfg.rumble&&cfg.pad&&padRef&&padRef.vibrationActuator)pad
 // ================= SOUNDTRACK =================
 // Scenes: home, q1 (first third of the quiz), q2 (middle), q3 (final stretch), win, lose.
 // Put your songs in "all" for one continuous playlist, or in the other scenes for music that changes by stage.
-// Add your own files per scene: ["Title","soundtrack/file.mp3"]  (or just "soundtrack/file.mp3").
+// Add your own files per scene: ["Title","Soundtrack/file.mp3"]  (or just "Soundtrack/file.mp3").
 // Built-in original chiptune tunes are used too, unless you turn them off in Settings.
 const TRACKS={
-all:[["Song One","soundtrack/Soviet Connection.mp3"],["Song Two","soundtrack/Welcome-to-Los-Santos.mp3"]], home:[],
+ all:[["Soviet Connection","Soundtrack/Soviet%20Connection.mp3"],["Welcome to Los Santos","Soundtrack/Welcome-to-Los-Santos.mp3"]],   // plays all the way through (title screen, questions, results)
+ home:[],
  q1:[],
  q2:[],
  q3:[],
@@ -76,10 +80,15 @@ let sTimer=null,sTrack=null,sStep=0,sNext=0;
 const tIdx={all:0,home:0,q1:0,q2:0,q3:0,win:0,lose:0};
 
 const sceneKey=sc=>cfg.continuous?"all":(cfg.follow?sc:"home");
+const LC={};   // track lists are built once, not on every call
 function list(key){
+ const ck=key+(cfg.builtin?"1":"0");
+ if(LC[ck])return LC[ck];
  const f=(TRACKS[key]||[]).map(t=>typeof t==="string"?{t:t.split("/").pop().replace(/\.[^.]+$/,""),f:t}:{t:t[0],f:t[1]});
- return (cfg.builtin||!f.length)?f.concat(SYN[key]||[]):f;
+ return LC[ck]=(cfg.builtin||!f.length)?f.concat(SYN[key]||[]):f;
 }
+const pre=new Audio();pre.preload="auto";   // quietly downloads the next song so skipping is instant
+function prefetch(key){const l=list(key),n=l[(tIdx[key]+1)%l.length];if(l.length>1&&n&&n.f&&pre._u!==n.f){pre._u=n.f;pre.src=n.f}}
 const targetVol=()=>Math.min(1,cfg.musicVol*(curKey==="all"?(scn.charAt(0)==="q"?cfg.qVol:1):(SCENE_VOL[curKey]||1)));
 function setVol(v){curVol=Math.max(0,Math.min(1,v));bgm.volume=curVol;if(mg)mg.gain.value=curVol}
 function fadeTo(v,ms,done){
@@ -122,6 +131,7 @@ function playIdx(key,i){
  if(t.f){
   bgm.loop=l.length===1;bgm.src=t.f;
   bgm.play().then(()=>fadeTo(targetVol(),500)).catch(()=>{playing=null;drawNow()});
+  prefetch(key);
  }else{
   try{ctx();if(!mg){mg=ac.createGain();mg.connect(ac.destination)}mg.gain.value=0;
    sTrack=t;sStep=0;sNext=ac.currentTime+.05;sTimer=setInterval(schedSynth,100);fadeTo(targetVol(),500)}
@@ -160,12 +170,45 @@ function togglePlay(){
  if(playing&&(playing.f?!!bgm.src:!!sTrack)){setVol(targetVol());resumeMusic();drawNow()}else applyScene();
 }
 function nudgeVol(d){cfg.musicVol=Math.max(0,Math.min(1,+(cfg.musicVol+d).toFixed(2)));commit()}
-// browsers only allow sound after a click or key press, so start on the first one
-["pointerdown","keydown","touchstart"].forEach(ev=>addEventListener(ev,()=>{if(cfg.music&&!userPaused)applyScene()},{once:true}));
+// ---- autoplay: music starts as soon as the page loads. Browsers may block that until the first
+// click, tap or key press, so we also retry on every interaction and show a hint until sound is really playing.
+const UEV=["pointerdown","keydown","touchstart","click"];
+function audible(){
+ if(eggAudio)return !eggAudio.paused;
+ if(!playing)return !wantMusic(scn);
+ return playing.f?!bgm.paused:(!!ac&&ac.state==="running");
+}
+function settle(){
+ const ok=!cfg.music||userPaused||audible();
+ if(hint)hint.hidden=ok;
+ if(ok&&cfg.music&&!userPaused&&!unlocked){unlocked=true;UEV.forEach(ev=>removeEventListener(ev,unlock,true))}
+}
+function unlock(){
+ if(unlocked)return;
+ try{ctx()}catch(e){}
+ if(eggAudio)eggAudio.play().catch(()=>{});
+ else if(cfg.music&&!userPaused){
+  if(playing&&playing.f&&bgm.paused)bgm.play().catch(()=>{});
+  else if(!playing)applyScene();
+ }
+ setTimeout(settle,300);
+}
+UEV.forEach(ev=>addEventListener(ev,unlock,true));
+// pause everything when the tab is hidden, resume when it comes back
+let wasMusic=false,wasEgg=false;
+document.addEventListener("visibilitychange",()=>{
+ if(document.hidden){
+  wasMusic=!!playing&&isPlaying()&&!userPaused;wasEgg=!!eggAudio&&!eggAudio.paused;
+  if(wasMusic)pauseMusic();if(wasEgg)eggAudio.pause();
+ }else{
+  if(wasMusic&&cfg.music)resumeMusic();if(wasEgg&&cfg.music&&eggAudio)eggAudio.play().catch(()=>{});
+  wasMusic=wasEgg=false;
+ }
+});
 
 // ================= SETTINGS PANEL (built by script) =================
 const rowsRefresh=[];
-let gear=null,ov=null,bar=null,padTag=null,jumpSel=null;
+let gear=null,ov=null,bar=null,padTag=null,jumpSel=null,hint=null,unlocked=false,npEls=[],ppEls=[];
 function h(t,p,...k){
  const e=document.createElement(t);
  if(p)Object.keys(p).forEach(n=>{if(n==="role"||n.indexOf("aria-")===0)e.setAttribute(n,p[n]);else e[n]=p[n]});
@@ -177,13 +220,13 @@ function apply(){
  if(eggAudio){eggAudio.volume=eggVol();cfg.music?eggAudio.play().catch(()=>{}):eggAudio.pause()}
  document.documentElement.style.setProperty("--fs",cfg.big?"15px":"");
  if(isPlaying()&&!fade)setVol(targetVol());
- applyScene();drawMusic();rowsRefresh.forEach(f=>f());
+ startPoll();applyScene();drawMusic();rowsRefresh.forEach(f=>f());
 }
 function drawMusic(){const b=$("mus");if(!b)return;b.textContent=cfg.music?"🎵 MUSIC ON":"🎵 MUSIC OFF";b.setAttribute("aria-pressed",cfg.music)}
 function drawNow(){
  const key=curKey||sceneKey(scn),l=list(key),t=isPlaying()?playing:l[tIdx[key]];
- document.querySelectorAll(".cs-np").forEach(e=>{e.textContent="♪ "+(cfg.follow&&key!=="all"?LAB[key]+": ":"")+(t?t.t:"NO TRACKS")+(userPaused?" (PAUSED)":"")});
- document.querySelectorAll(".cs-pp").forEach(b=>{b.textContent=isPlaying()?"⏸":"▶"});
+ npEls.forEach(e=>{e.textContent="♪ "+(cfg.follow&&key!=="all"?LAB[key]+": ":"")+(t?t.t:"NO TRACKS")+(userPaused?" (PAUSED)":"")});
+ ppEls.forEach(b=>{b.textContent=isPlaying()?"⏸":"▶"});
  if(jumpSel){
   const sig=key+"|"+l.map(x=>x.t).join("|");
   if(jumpSel.dataset.sig!==sig){jumpSel.dataset.sig=sig;jumpSel.replaceChildren();
@@ -191,6 +234,7 @@ function drawNow(){
    l.forEach((x,i)=>jumpSel.append(h("option",{value:i,textContent:x.t})))}
   jumpSel.value=tIdx[key];
  }
+ settle();
 }
 if($("mus"))$("mus").onclick=()=>{cfg.music=!cfg.music;if(cfg.music)userPaused=false;commit()};
 
@@ -232,6 +276,8 @@ const STYLE=`
 #cs-bar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg,#0b0221);border-top:3px solid var(--a,#22f0ff);font-size:.8em;color:var(--ink,#f4f0ff)}
 #cs-bar .cs-np{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #cs-bar input[type=range]{width:80px;accent-color:var(--b,#ff2ec4)}
+#cs-hint{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);z-index:60;max-width:92vw;background:var(--c,#ffe600);color:var(--onc,#000);border-color:var(--c,#ffe600)}
+#cs-hint[hidden]{display:none}
 body{padding-bottom:64px}
 #cs-ov{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.85);overflow:auto;padding:14px}
 #cs-ov[hidden]{display:none}
@@ -259,6 +305,7 @@ function buildSettings(){
  document.head.append(h("style",{textContent:STYLE}));
  gear=h("button",{id:"cs-gear",className:"cs-btn",textContent:"⚙",title:"Settings (Esc)","aria-label":"Settings",onclick:openSettings});
  padTag=h("span",{id:"cs-pad",textContent:"🎮 CONTROLLER",hidden:true});
+ hint=h("button",{id:"cs-hint",className:"cs-btn",textContent:"🎵 TAP ANYWHERE TO START MUSIC",hidden:true,onclick:unlock});
  const mini=h("input",{type:"range",min:0,max:1,step:.05,value:cfg.musicVol,title:"Music volume",oninput:()=>{cfg.musicVol=+mini.value;commit()}});
  mini.setAttribute("aria-label","Music volume");rowsRefresh.push(()=>{mini.value=cfg.musicVol});
  bar=h("div",{id:"cs-bar",onwheel:e=>{e.preventDefault();nudgeVol(e.deltaY<0?.05:-.05)}},
@@ -307,7 +354,8 @@ function buildSettings(){
   confirmBtn("RESET SETTINGS",()=>{cfg=Object.assign({},DEF);commit()}),
   h("button",{className:"cs-btn cs-close",textContent:"✔ CLOSE",onclick:closeSettings}));
  ov=h("div",{id:"cs-ov",hidden:true,onclick:e=>{if(e.target===ov)closeSettings()}},pn);
- document.body.append(gear,padTag,bar,ov);
+ document.body.append(gear,padTag,hint,bar,ov);
+ npEls=[...document.querySelectorAll(".cs-np")];ppEls=[...document.querySelectorAll(".cs-pp")];
  apply();drawNow();
 }
 
@@ -351,7 +399,7 @@ addEventListener("keydown",e=>{
 
 // ================= CONTROLLER =================
 const PADMAP={a:0,b:1,x:2,y:3,lb:4,rb:5,select:8,start:9,up:12,down:13,left:14,right:15};
-let prevPad={},holdPad={},padRef=null;
+let prevPad={},holdPad={},padRef=null,polling=false;
 function press(k){
  if(!cfg.pad)return;
  const open=!!ov&&!ov.hidden;
@@ -381,29 +429,27 @@ function press(k){
  if(k==="a"){if(a&&a.tagName==="BUTTON")a.click();else move("down");return}
  if(DIRS.includes(k))move(k);
 }
-function poll(){
+function startPoll(){if(polling||!cfg.pad)return;polling=true;requestAnimationFrame(poll)}
+function poll(){   // only runs while a controller is connected
  const gp=navigator.getGamepads?[...navigator.getGamepads()].find(g=>g&&g.connected):null;
- if(gp&&cfg.pad){
-  padRef=gp;if(padTag)padTag.hidden=false;document.body.classList.add("cs-padmode");
-  const ax=gp.axes||[],cur={},now=performance.now();
-  for(const k in PADMAP)cur[k]=!!(gp.buttons[PADMAP[k]]&&gp.buttons[PADMAP[k]].pressed);
-  cur.left=cur.left||ax[0]<-.6;cur.right=cur.right||ax[0]>.6;cur.up=cur.up||ax[1]<-.6;cur.down=cur.down||ax[1]>.6;
-  for(const k in cur){
-   if(!cur[k])continue;
-   if(!prevPad[k]){press(k);holdPad[k]=now+350}
-   else if(DIRS.includes(k)&&now>=holdPad[k]){press(k);holdPad[k]=now+140}
-  }
-  prevPad=cur;
- }else if(padRef||!cfg.pad){
-  padRef=null;prevPad={};if(padTag)padTag.hidden=true;document.body.classList.remove("cs-padmode");
+ if(!gp||!cfg.pad){padRef=null;prevPad={};if(padTag)padTag.hidden=true;document.body.classList.remove("cs-padmode");polling=false;return}
+ padRef=gp;if(padTag)padTag.hidden=false;document.body.classList.add("cs-padmode");
+ const ax=gp.axes||[],cur={},now=performance.now();
+ for(const k in PADMAP)cur[k]=!!(gp.buttons[PADMAP[k]]&&gp.buttons[PADMAP[k]].pressed);
+ cur.left=cur.left||ax[0]<-.6;cur.right=cur.right||ax[0]>.6;cur.up=cur.up||ax[1]<-.6;cur.down=cur.down||ax[1]>.6;
+ for(const k in cur){
+  if(!cur[k])continue;
+  if(!prevPad[k]){unlock();press(k);holdPad[k]=now+350}
+  else if(DIRS.includes(k)&&now>=holdPad[k]){press(k);holdPad[k]=now+140}
  }
+ prevPad=cur;
  requestAnimationFrame(poll);
 }
 
 // ================= SECRET NAMES (easter eggs) =================
 // Type the code as the player name, then press PLAY. Add more codes here.
 const EGGS={
- "2077":{file:"2077.mp3",theme:"sunset",alias:"V"}   // alias = name saved on the leaderboard (optional)
+ "2077":{file:"Soundtrack/2077.mp3",theme:"sunset",alias:"V"}   // alias = name saved on the leaderboard (optional)
 };
 let eggAudio=null,eggTheme=null;
 const eggVol=()=>Math.min(1,cfg.musicVol*.9);
@@ -517,6 +563,6 @@ function loadBoard(){
 
 // ---------- start-up (keep at the very bottom) ----------
 buildSettings();
-requestAnimationFrame(poll);
+startPoll();addEventListener("gamepadconnected",startPoll);
 render(localScores(),"LOADING...");
 (async()=>{try{db=await claude.use("db")}catch(e){db=null}loadBoard()})();
