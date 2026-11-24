@@ -1,3 +1,4 @@
+// ... your BANK stays here, above this line ...
 const LEVELS={junior:"AGES 8-11",mid:"AGES 12-14",senior:"AGES 15-18"};
 const SHORT={junior:"8-11",mid:"12-14",senior:"15-18"};
 const ROUND=10,TIME=15;
@@ -5,7 +6,36 @@ const $=id=>document.getElementById(id);
 let level="junior",name="",qs=[],idx=0,score=0,streak=0,left=TIME,timer=null,locked=false,db=null,myLast=null;
 
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function show(id){["start","game","end"].forEach(s=>$(s).classList.toggle("hide",s!==id))}
+// CHANGED: music plays on the start screen and fades out when a game or results screen shows
+function show(id){["start","game","end"].forEach(s=>$(s).classList.toggle("hide",s!==id));id==="start"?musicOn():musicOff()}
+
+// ---------- home screen soundtrack ----------
+const TRACKS=["Soviet Connection.mp3"];   // <-- add your own files here, e.g. "music/track1.mp3","music/track2.mp3"
+const VOL=.4;                         // music volume, 0 to 1
+let music=true,tIdx=0,fade=null;
+try{music=localStorage.getItem("cyberquiz-music")!=="0"}catch(e){}
+const bgm=new Audio();bgm.volume=VOL;bgm.preload="auto";
+function loadTrack(){bgm.src=TRACKS[tIdx%TRACKS.length]}
+bgm.onended=()=>{tIdx++;loadTrack();bgm.play().catch(()=>{})};   // plays the list in order, then repeats
+function musicOn(){
+ clearInterval(fade);fade=null;
+ if(!music||!TRACKS.length)return;
+ if(!bgm.src)loadTrack();
+ bgm.volume=VOL;bgm.play().catch(()=>{});
+}
+function musicOff(){            // short fade-out (8 steps x 60ms = about half a second)
+ if(bgm.paused||fade)return;
+ let n=8;
+ fade=setInterval(()=>{bgm.volume=Math.max(0,VOL*--n/8);if(n<=0){clearInterval(fade);fade=null;bgm.pause();bgm.volume=VOL}},60);
+}
+function drawMusic(){const b=$("mus");if(!b)return;b.textContent=music?"🎵 MUSIC ON":"🎵 MUSIC OFF";b.setAttribute("aria-pressed",music)}
+if($("mus"))$("mus").onclick=()=>{
+ music=!music;try{localStorage.setItem("cyberquiz-music",music?"1":"0")}catch(e){}
+ drawMusic();
+ if(!music)musicOff();else if(!$("start").classList.contains("hide"))musicOn();
+};
+// browsers only allow sound after the player clicks or presses a key, so start on the first one
+["pointerdown","keydown"].forEach(ev=>addEventListener(ev,()=>{if(!$("start").classList.contains("hide"))musicOn()},{once:true}));
 
 // level buttons
 Object.keys(LEVELS).forEach(k=>{const b=document.createElement("button");b.textContent=LEVELS[k];b.dataset.k=k;
@@ -85,5 +115,6 @@ function loadBoard(){
    ()=>{clearTimeout(t);unsub=null;render(localScores(),"SHOWING THIS DEVICE ONLY")});
  }else render(localScores(),"SCORES SAVED ON THIS DEVICE");
 }
+drawMusic();   // NEW: sets the music button's label
 render(localScores(),"LOADING...");
 (async()=>{try{db=await claude.use("db")}catch(e){db=null}loadBoard()})();
